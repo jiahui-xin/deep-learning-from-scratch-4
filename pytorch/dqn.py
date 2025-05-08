@@ -24,10 +24,10 @@ class ReplayBuffer:
     def get_batch(self):
         data = random.sample(self.buffer, self.batch_size)
 
-        state = torch.tensor(np.stack([x[0] for x in data]))
+        state = torch.tensor(np.array([x[0] for x in data]), dtype=torch.float32)
         action = torch.tensor(np.array([x[1] for x in data]).astype(np.long))
         reward = torch.tensor(np.array([x[2] for x in data]).astype(np.float32))
-        next_state = torch.tensor(np.stack([x[3] for x in data]))
+        next_state = torch.tensor(np.array([x[3] for x in data]), dtype=torch.float32)
         done = torch.tensor(np.array([x[4] for x in data]).astype(np.int32))
         return state, action, reward, next_state, done
 
@@ -64,7 +64,7 @@ class DQNAgent:
         if np.random.rand() < self.epsilon:
             return np.random.choice(self.action_size)
         else:
-            state = torch.tensor(state[np.newaxis, :])
+            state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
             qs = self.qnet(state)
             return qs.argmax().item()
 
@@ -102,12 +102,21 @@ reward_history = []
 
 for episode in range(episodes):
     state = env.reset()
+    if isinstance(state, tuple):  # Handle new gym API
+        state, _ = state
     done = False
     total_reward = 0
 
     while not done:
         action = agent.get_action(state)
-        next_state, reward, done, info = env.step(action)
+        step_result = env.step(action)
+        
+        # Handle different gym versions
+        if len(step_result) == 5:  # Newer gym version (step returns 5 values)
+            next_state, reward, terminated, truncated, info = step_result
+            done = terminated or truncated
+        else:  # Older gym version (step returns 4 values)
+            next_state, reward, done, info = step_result
 
         agent.update(state, action, reward, next_state, done)
         state = next_state
