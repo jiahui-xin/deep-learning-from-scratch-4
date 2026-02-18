@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from gym.wrappers import RecordVideo
+import os
 
 
 class ReplayBuffer:
@@ -25,7 +27,7 @@ class ReplayBuffer:
         data = random.sample(self.buffer, self.batch_size)
 
         state = torch.tensor(np.array([x[0] for x in data]), dtype=torch.float32)
-        action = torch.tensor(np.array([x[1] for x in data]).astype(np.long))
+        action = torch.tensor(np.array([x[1] for x in data]).astype(np.int64))#action = torch.tensor(np.array([x[1] for x in data]).astype(np.long))
         reward = torch.tensor(np.array([x[2] for x in data]).astype(np.float32))
         next_state = torch.tensor(np.array([x[3] for x in data]), dtype=torch.float32)
         done = torch.tensor(np.array([x[4] for x in data]).astype(np.int32))
@@ -96,7 +98,22 @@ class DQNAgent:
 
 episodes = 300
 sync_interval = 20
-env = gym.make('CartPole-v0')
+render_interval = 50  # 每50个episode渲染一次
+video_dir = "./dqn_videos"  # 更改视频保存目录
+if not os.path.exists(video_dir):
+    os.makedirs(video_dir)
+
+print(f"视频将保存到: {os.path.abspath(video_dir)}")
+
+# 使用RecordVideo包装环境，指定要记录的episodes
+base_env = gym.make('CartPole-v0', render_mode="rgb_array")
+env = RecordVideo(
+    base_env, 
+    video_dir,
+    episode_trigger=lambda x: x % render_interval == 0,  # 每render_interval个episode录制一次
+    name_prefix="cartpole-dqn"  # 添加前缀以区分不同的运行
+)
+
 agent = DQNAgent()
 reward_history = []
 
@@ -106,7 +123,7 @@ for episode in range(episodes):
         state, _ = state
     done = False
     total_reward = 0
-
+    
     while not done:
         action = agent.get_action(state)
         step_result = env.step(action)
@@ -128,3 +145,7 @@ for episode in range(episodes):
     reward_history.append(total_reward)
     if episode % 10 == 0:
         print("episode :{}, total reward : {}".format(episode, total_reward))
+
+# 添加环境关闭
+env.close()
+print(f"训练完成！视频已保存到 {os.path.abspath(video_dir)} 目录")
